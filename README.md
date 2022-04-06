@@ -1,1 +1,1 @@
-# DMT-Assignment1
+# Data Mining Techniques - Assignment1
