@@ -31,7 +31,7 @@ def aggregate_dataset(dataset):
     aggregated_dataset = aggregated_dataset.drop(columns=['mean_value', 'sum_value'])
     pivot_table = aggregated_dataset.pivot_table(index=['id', 'date'], 
                                              columns=['variable'], values='final_value').reset_index()
-    pivot_table['mood'] = pivot_table['mood'].round()
+    pivot_table['mood'] = pivot_table['mood']
     return pivot_table
 
 def clean_dataset(dataset):
@@ -84,20 +84,68 @@ def sliding_window(dataset):
             sample = []
             first_date = row['date']
             n_empty = 0
+
+            current_date = None
+            final_day_date = 0
+
             for interval_date in range(interval_size):
+
+                final_day_date += 1
                 
                 current_date = first_date + timedelta(days=interval_date)
                 current_date_features = user_df[user_df['date'] == current_date]
                 if current_date_features.empty:
                     n_empty += 1
-                    break
-                sample.append(np.squeeze(current_date_features.to_numpy())[2:])
+                else:
+                    sample.append(np.squeeze(current_date_features.to_numpy())[3:])
                     
-            label_date = first_date + timedelta(days=interval_date+1)
-            label = user_df[user_df['date'] == label_date]['mood']
+            label_date = first_date + timedelta(days=final_day_date+1)
+            label = user_df[user_df['date'] == label_date]['label']
             
             if n_empty > empty_threshold or label.empty:
                 break
             else:
                 samples.append((sample, label.item()))          
     return samples        
+
+def sliding_window_baseline(dataset):
+    # Sliding window over all days per user. From each day look 5 days in the future and store the features
+    # of available dates. Check if the 6th day has a mood label. If so, store the entire sequence with the
+    # corresponding label. Each sequence also needs at least a certain amount of days available or it will
+    # be discarded.
+    interval_size = 5
+    empty_threshold = 3
+
+    users = list(dataset['id'].unique())
+
+    samples = []
+
+    for user in users:
+        user_df = dataset[dataset['id'] == user]
+        for index, row in user_df.iterrows():
+            sample = []
+            first_date = row['date']
+            n_empty = 0
+
+            current_date = None
+            final_day_date = 0
+
+            for interval_date in range(interval_size):
+
+                final_day_date += 1
+
+                current_date = first_date + timedelta(days=interval_date)
+                current_date_features = user_df[user_df['date'] == current_date]
+                if current_date_features.empty:
+                    n_empty += 1
+                else:
+                    sample.append(current_date_features['label'].item())
+
+            label_date = first_date + timedelta(days=final_day_date+1)
+            label = user_df[user_df['date'] == label_date]['label']
+
+            if n_empty > empty_threshold or label.empty:
+                break
+            else:
+                samples.append((sample, label.item()))
+    return samples
